@@ -13,11 +13,11 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	uuid "github.com/gofrs/uuid"
+	"github.com/gofrs/uuid"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type MurModifier func(mur *toolchainv1alpha1.MasterUserRecord) error
@@ -72,8 +72,8 @@ var DefaultNSTemplateSet = toolchainv1alpha1.NSTemplateSet{
 	},
 }
 
-func NewMasterUserRecords(t *testing.T, size int, nameFmt string, modifiers ...MurModifier) []runtime.Object {
-	murs := make([]runtime.Object, size)
+func NewMasterUserRecords(t *testing.T, size int, nameFmt string, modifiers ...MurModifier) []client.Object {
+	murs := make([]client.Object, size)
 	for i := 0; i < size; i++ {
 		murs[i] = NewMasterUserRecord(t, fmt.Sprintf(nameFmt, i), modifiers...)
 	}

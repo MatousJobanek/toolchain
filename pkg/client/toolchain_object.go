@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -14,9 +11,9 @@ import (
 // CompareToolchainObjects is a function that takes two instances of ToolchainObjects and compares them if their desired state is same
 type CompareToolchainObjects func(firstObject, secondObject ToolchainObject) (bool, error)
 
-// ToolchainObject is a type containing runtime.Object and information about it. It provides helpful methods on top of the object's data
+// ToolchainObject is a type containing client.Object with additional functions. It provides helpful methods on top of the object's data
 type ToolchainObject interface {
-	v1.Object
+	client.Object
 	GetGvk() schema.GroupVersionKind
 	GetClientObject() client.Object
 	HasSameGvk(otherObject ToolchainObject) bool
@@ -31,36 +28,30 @@ type ComparableToolchainObject interface {
 }
 
 type toolchainObjectImpl struct {
-	v1.Object
+	client.Object
 	gvk          schema.GroupVersionKind
-	clientObject client.Object
 }
 
-// NewToolchainObject returns an instance of ToolchainObject for the given runtime.Object
+// NewToolchainObject returns an instance of ToolchainObject for the given client.Object
 func NewToolchainObject(ob client.Object) (ToolchainObject, error) {
 	if ob == nil {
 		return nil, fmt.Errorf("the provided object is nil, so the constructor cannot create an instance of ToolchainObject")
 	}
-	accessor, err := meta.Accessor(ob)
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to get accessor of object %v", ob)
-	}
 
 	return &toolchainObjectImpl{
-		Object:       accessor,
+		Object:       ob,
 		gvk:          ob.GetObjectKind().GroupVersionKind(),
-		clientObject: ob,
 	}, nil
 }
 
-// GetGvk returns GVK of the runtime.Object stored in ToolchainObject
+// GetGvk returns GVK of the client.Object stored in ToolchainObject
 func (o *toolchainObjectImpl) GetGvk() schema.GroupVersionKind {
 	return o.gvk
 }
 
-// GetClientObject returns the runtime.Object stored in ToolchainObject
+// GetClientObject returns the client.Object stored in ToolchainObject
 func (o *toolchainObjectImpl) GetClientObject() client.Object {
-	return o.clientObject
+	return o.Object
 }
 
 // HasSameGvk returns if the provided ToolchainObject has the same GVK
@@ -83,7 +74,7 @@ type comparableToolchainObjectImpl struct {
 	compare CompareToolchainObjects
 }
 
-// NewComparableToolchainObject returns an instance of ComparableToolchainObject for the given runtime.Object
+// NewComparableToolchainObject returns an instance of ComparableToolchainObject for the given client.Object
 func NewComparableToolchainObject(ob client.Object, compare CompareToolchainObjects) (ComparableToolchainObject, error) {
 	toolchainObject, err := NewToolchainObject(ob)
 	if err != nil {
