@@ -9,17 +9,12 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/h2non/gock.v1"
-	"gotest.tools/assert/cmp"
 	corev1 "k8s.io/api/core/v1"
 	kubeclientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -162,40 +157,6 @@ func TestClusterControllerChecks(t *testing.T) {
 		require.Equal(t, reconcile.Result{}, recResult)
 		assertClusterStatus(t, cl, "stable")
 	})
-
-	t.Run("migrates connection settings to kubeconfig in secret", func(t *testing.T) {
-		// given
-		tc, secret := newToolchainCluster("tc", tcNs, "http://cluster.com", toolchainv1alpha1.ToolchainClusterStatus{})
-		cl := test.NewFakeClient(t, tc, secret)
-		reset := setupCachedClusters(t, cl, tc)
-		defer reset()
-
-		controller, req := prepareReconcile(tc, cl, requeAfter)
-		expectedKubeConfig := composeKubeConfigFromData([]byte("mycooltoken"), "http://cluster.com", "test-namespace", true)
-
-		// when
-		_, err := controller.Reconcile(context.TODO(), req)
-		secretAfterReconcile := &corev1.Secret{}
-		require.NoError(t, cl.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(secret), secretAfterReconcile))
-		actualKubeConfig, loadErr := clientcmd.Load(secretAfterReconcile.Data["kubeconfig"])
-
-		// then
-		require.NoError(t, err)
-		require.NoError(t, loadErr)
-		assert.Contains(t, secretAfterReconcile.Data, "kubeconfig")
-
-		// we need to use this more complex equals, because we don't initialize the Extension fields (i.e. they're nil)
-		// while they're initialized and empty after deserialization, which causes the "normal" deep equals to fail.
-		result := cmp.DeepEqual(expectedKubeConfig, *actualKubeConfig,
-			cmpopts.IgnoreFields(clientcmdapi.Config{}, "Extensions"),
-			cmpopts.IgnoreFields(clientcmdapi.Preferences{}, "Extensions"),
-			cmpopts.IgnoreFields(clientcmdapi.Cluster{}, "Extensions"),
-			cmpopts.IgnoreFields(clientcmdapi.AuthInfo{}, "Extensions"),
-			cmpopts.IgnoreFields(clientcmdapi.Context{}, "Extensions"),
-		)()
-
-		assert.True(t, result.Success())
-	})
 }
 
 func TestGetClusterHealth(t *testing.T) {
@@ -241,18 +202,6 @@ func TestGetClusterHealth(t *testing.T) {
 		require.Equal(t, reconcile.Result{RequeueAfter: requeAfter}, recResult)
 		assertClusterStatus(t, cl, "stable", clusterNotReadyCondition())
 	})
-}
-func TestComposeKubeConfig(t *testing.T) {
-	// when
-	kubeConfig := composeKubeConfigFromData([]byte("token"), "http://over.the.rainbow", "the-namespace", false)
-
-	// then
-	context := kubeConfig.Contexts[kubeConfig.CurrentContext]
-
-	assert.Equal(t, "token", kubeConfig.AuthInfos[context.AuthInfo].Token)
-	assert.Equal(t, "http://over.the.rainbow", kubeConfig.Clusters[context.Cluster].Server)
-	assert.Equal(t, "the-namespace", context.Namespace)
-	assert.False(t, kubeConfig.Clusters[context.Cluster].InsecureSkipTLSVerify)
 }
 
 func setupCachedClusters(t *testing.T, cl *test.FakeClient, clusters ...*toolchainv1alpha1.ToolchainCluster) func() {
